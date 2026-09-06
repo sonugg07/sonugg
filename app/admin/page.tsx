@@ -109,7 +109,7 @@ export default function AdminPage() {
       sessionStorage.setItem('sonugg_admin_authed', 'true');
       setPinError('');
     } else {
-      setPinError('Invalid PIN code. Default PIN is sonugg2025');
+      setPinError('Invalid security PIN. Please try again.');
     }
   };
 
@@ -416,7 +416,7 @@ export default function AdminPage() {
               <input
                 type="password"
                 required
-                placeholder="Enter PIN (Default: sonugg2025)"
+                placeholder="Enter security PIN"
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
                 className="w-full px-4 py-3.5 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-pink-500 text-center tracking-widest text-lg text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-pink-500 transition-all font-mono"
@@ -427,10 +427,6 @@ export default function AdminPage() {
                   <span>{pinError}</span>
                 </p>
               )}
-            </div>
-
-            <div className="p-3 rounded-xl bg-pink-950/30 border border-pink-500/20 text-xs text-pink-300 font-mono">
-              💡 <strong>Default PIN:</strong> <code className="text-white font-bold bg-black/40 px-1 py-0.5 rounded">sonugg2025</code>
             </div>
 
             <button
