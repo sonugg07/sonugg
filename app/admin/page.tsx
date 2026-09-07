@@ -194,34 +194,75 @@ export default function AdminPage() {
     }
   };
 
+  // Helper: Convert selected file to lightweight optimized Base64 Data URL
+  const fileToOptimizedDataUrl = (file: File, maxWidth = 1200, quality = 0.85): Promise<string> => {
+    return new Promise((resolve) => {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        const result = event.target?.result as string;
+        if (!result) {
+          resolve('');
+          return;
+        }
+        const img = new window.Image();
+        img.onload = () => {
+          let width = img.width;
+          let height = img.height;
+          if (width > maxWidth) {
+            height = Math.round((height * maxWidth) / width);
+            width = maxWidth;
+          }
+          const canvas = document.createElement('canvas');
+          canvas.width = width;
+          canvas.height = height;
+          const ctx = canvas.getContext('2d');
+          if (!ctx) {
+            resolve(result);
+            return;
+          }
+          ctx.drawImage(img, 0, 0, width, height);
+          try {
+            const dataUrl = canvas.toDataURL('image/webp', quality);
+            resolve(dataUrl);
+          } catch {
+            try {
+              const dataUrl = canvas.toDataURL('image/jpeg', quality);
+              resolve(dataUrl);
+            } catch {
+              resolve(result);
+            }
+          }
+        };
+        img.onerror = () => resolve(result);
+        img.src = result;
+      };
+      reader.onerror = () => resolve('');
+      reader.readAsDataURL(file);
+    });
+  };
+
   // Image upload handler
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>, targetField: 'avatar' | 'projectImage') => {
     const file = e.target.files?.[0];
     if (!file) return;
 
-    const uploadFormData = new FormData();
-    uploadFormData.append('file', file);
-
     try {
-      showToast('Uploading image...', 'success');
-      const res = await fetch('/api/upload', {
-        method: 'POST',
-        body: uploadFormData,
-      });
-      const result = await res.json();
+      showToast('Optimizing and loading photo...', 'success');
+      const maxWidth = targetField === 'avatar' ? 400 : 1200;
+      const dataUrl = await fileToOptimizedDataUrl(file, maxWidth, 0.82);
 
-      if (result.success && result.url) {
+      if (dataUrl) {
         if (targetField === 'avatar') {
-          setFormData({
-            ...formData,
-            profile: { ...formData.profile, avatar: result.url },
-          });
+          setFormData((prev) => ({
+            ...prev,
+            profile: { ...prev.profile, avatar: dataUrl },
+          }));
         } else if (targetField === 'projectImage') {
-          setProjectForm((prev) => ({ ...prev, image: result.url }));
+          setProjectForm((prev) => ({ ...prev, image: dataUrl }));
         }
-        showToast('Image uploaded successfully!', 'success');
+        showToast('Photo uploaded successfully! Visible immediately in preview.', 'success');
       } else {
-        showToast(result.error || 'Upload failed', 'error');
+        showToast('Failed to load image file.', 'error');
       }
     } catch (err) {
       console.error(err);
@@ -234,7 +275,7 @@ export default function AdminPage() {
     setProjectForm({
       title: '',
       description: '',
-      image: 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=1200&auto=format&fit=crop',
+      image: '',
       category: 'Web3 & dApps',
       technologies: ['Solidity', 'Next.js', 'Viem'],
       demoUrl: '',
@@ -270,7 +311,12 @@ export default function AdminPage() {
     if (editingProject) {
       updatedProjects = formData.projects.map((p) =>
         p.id === editingProject.id
-          ? ({ ...p, ...projectForm, technologies: techArray } as Project)
+          ? ({
+              ...p,
+              ...projectForm,
+              technologies: techArray,
+              image: projectForm.image || p.image || 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=1200&auto=format&fit=crop',
+            } as Project)
           : p
       );
     } else {
@@ -278,12 +324,12 @@ export default function AdminPage() {
         id: `proj-${Date.now()}`,
         title: projectForm.title || 'Untitled Project',
         description: projectForm.description || '',
-        image: projectForm.image || '',
+        image: projectForm.image || 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=1200&auto=format&fit=crop',
         category: projectForm.category || 'Web3 & dApps',
         technologies: techArray.length ? techArray : ['Web3'],
         demoUrl: projectForm.demoUrl || '',
         githubUrl: projectForm.githubUrl || '',
-        status: projectForm.status || 'Live',
+        status: projectForm.status || 'Live on Mainnet',
         featured: !!projectForm.featured,
       };
       updatedProjects = [newProj, ...formData.projects];
@@ -829,23 +875,11 @@ export default function AdminPage() {
                         className="w-full h-full object-cover"
                       />
                     </div>
-                    <div className="flex-1 space-y-2 w-full">
-                      <input
-                        type="text"
-                        value={formData.profile.avatar}
-                        placeholder="/images/sonugg-avatar.png or https://..."
-                        onChange={(e) =>
-                          setFormData({
-                            ...formData,
-                            profile: { ...formData.profile, avatar: e.target.value },
-                          })
-                        }
-                        className="w-full px-4 py-2.5 rounded-xl bg-zinc-900 border border-zinc-800 text-xs font-mono text-zinc-200 focus:border-pink-500 focus:outline-none"
-                      />
+                    <div className="flex-1 space-y-3 w-full">
                       <div className="flex items-center gap-3">
-                        <label className="cursor-pointer inline-flex items-center gap-1.5 px-3 py-1.5 rounded-lg bg-pink-500/10 hover:bg-pink-500/20 text-pink-400 border border-pink-500/30 text-xs font-medium transition-all">
-                          <Upload size={13} />
-                          <span>Upload New Avatar</span>
+                        <label className="cursor-pointer inline-flex items-center gap-2 px-4 py-2.5 rounded-xl bg-pink-500 hover:bg-pink-600 text-white text-xs font-semibold shadow-md shadow-pink-500/25 transition-all">
+                          <Upload size={14} />
+                          <span>Upload Avatar Photo</span>
                           <input
                             type="file"
                             accept="image/*"
@@ -853,8 +887,11 @@ export default function AdminPage() {
                             onChange={(e) => handleFileUpload(e, 'avatar')}
                           />
                         </label>
-                        <span className="text-[11px] text-zinc-500">Supported: PNG, JPG, WEBP</span>
+                        <span className="text-xs text-zinc-400">Supported: PNG, JPG, WEBP</span>
                       </div>
+                      <p className="text-[11px] text-zinc-500">
+                        Select a square profile picture from your phone or computer.
+                      </p>
                     </div>
                   </div>
                 </div>
@@ -1475,20 +1512,51 @@ export default function AdminPage() {
               </div>
 
               <div>
-                <label className="block text-xs font-mono uppercase text-zinc-400 mb-1">
-                  Project Preview Image URL
+                <label className="block text-xs font-mono uppercase text-zinc-400 mb-2">
+                  Project Photo / Cover Image *
                 </label>
-                <div className="flex gap-2">
-                  <input
-                    type="text"
-                    placeholder="https://images.unsplash.com/... or upload"
-                    value={projectForm.image || ''}
-                    onChange={(e) => setProjectForm({ ...projectForm, image: e.target.value })}
-                    className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-xs font-mono text-white focus:border-pink-500 focus:outline-none"
-                  />
-                  <label className="cursor-pointer px-3 py-2 rounded-xl bg-pink-950 text-pink-300 border border-pink-500/30 text-xs font-medium flex items-center gap-1 whitespace-nowrap">
-                    <Upload size={12} />
-                    <span>Upload</span>
+                {projectForm.image ? (
+                  <div className="relative aspect-video w-full rounded-2xl overflow-hidden border-2 border-pink-500/40 bg-zinc-950 group">
+                    {/* eslint-disable-next-line @next/next/no-img-element */}
+                    <img
+                      src={projectForm.image}
+                      alt="Project Preview"
+                      className="w-full h-full object-cover"
+                    />
+                    <div className="absolute inset-0 bg-black/60 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center gap-3">
+                      <label className="cursor-pointer px-4 py-2 rounded-xl bg-pink-600 hover:bg-pink-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-lg transition-all">
+                        <Upload size={14} />
+                        <span>Change Photo</span>
+                        <input
+                          type="file"
+                          accept="image/*"
+                          className="hidden"
+                          onChange={(e) => handleFileUpload(e, 'projectImage')}
+                        />
+                      </label>
+                      <button
+                        type="button"
+                        onClick={() => setProjectForm((prev) => ({ ...prev, image: '' }))}
+                        className="px-3 py-2 rounded-xl bg-rose-600 hover:bg-rose-700 text-white text-xs font-semibold flex items-center gap-1.5 shadow-lg transition-all"
+                      >
+                        <Trash2 size={14} />
+                        <span>Remove Photo</span>
+                      </button>
+                    </div>
+                  </div>
+                ) : (
+                  <label className="cursor-pointer border-2 border-dashed border-pink-500/40 hover:border-pink-500 rounded-2xl p-8 flex flex-col items-center justify-center gap-3 bg-pink-950/10 hover:bg-pink-950/20 transition-all text-center group">
+                    <div className="w-12 h-12 rounded-2xl bg-pink-500/20 group-hover:bg-pink-500/30 text-pink-400 flex items-center justify-center transition-all shadow-md shadow-pink-500/10">
+                      <Upload size={22} />
+                    </div>
+                    <div>
+                      <span className="text-sm font-semibold text-white group-hover:text-pink-300">
+                        Click to Upload Project Photo
+                      </span>
+                      <p className="text-xs text-zinc-400 mt-1">
+                        Select PNG, JPG, or WEBP from your device (no URL needed)
+                      </p>
+                    </div>
                     <input
                       type="file"
                       accept="image/*"
@@ -1496,7 +1564,7 @@ export default function AdminPage() {
                       onChange={(e) => handleFileUpload(e, 'projectImage')}
                     />
                   </label>
-                </div>
+                )}
               </div>
 
               <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">

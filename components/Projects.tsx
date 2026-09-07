@@ -1,7 +1,6 @@
 'use client';
 
 import React, { useState } from 'react';
-import Image from 'next/image';
 import { ExternalLink, Layers, Code, Sparkles, Activity } from 'lucide-react';
 import { usePortfolio } from '@/context/PortfolioContext';
 import { GithubIcon } from '@/components/SocialIcon';
@@ -82,11 +81,16 @@ export const Projects: React.FC = () => {
             >
               {/* Project Image Preview */}
               <div className="relative aspect-video w-full overflow-hidden bg-zinc-950">
-                <Image
+                {/* eslint-disable-next-line @next/next/no-img-element */}
+                <img
                   src={project.image || 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=1200&auto=format&fit=crop'}
                   alt={project.title}
-                  fill
-                  className="object-cover object-center transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100"
+                  className="w-full h-full object-cover object-center transition-transform duration-700 group-hover:scale-105 opacity-90 group-hover:opacity-100"
+                  onError={(e) => {
+                    const target = e.target as HTMLImageElement;
+                    target.onerror = null;
+                    target.src = 'https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=1200&auto=format&fit=crop';
+                  }}
                 />
                 
                 {/* Gradient vignette */}
