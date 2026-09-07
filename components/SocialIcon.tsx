@@ -12,7 +12,8 @@ import {
 } from 'lucide-react';
 
 interface SocialIconProps {
-  iconName: string;
+  iconName?: string;
+  name?: string;
   className?: string;
   size?: number;
 }
@@ -58,8 +59,8 @@ export const DiscordIcon: React.FC<{ size?: number; className?: string }> = ({ s
   </svg>
 );
 
-export const SocialIcon: React.FC<SocialIconProps> = ({ iconName, className = "w-5 h-5", size = 20 }) => {
-  const normalized = (iconName || '').toLowerCase();
+export const SocialIcon: React.FC<SocialIconProps> = ({ iconName, name, className = "w-5 h-5", size = 20 }) => {
+  const normalized = (iconName || name || '').toLowerCase();
 
   if (normalized.includes('twitter') || normalized.includes('x')) {
     return <XTwitterIcon size={size} className={className} />;

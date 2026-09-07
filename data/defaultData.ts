@@ -1,6 +1,12 @@
 import { PortfolioData } from '@/types/portfolio';
 
 export const initialPortfolioData: PortfolioData = {
+  settings: {
+    isWebsiteOnline: true,
+    maintenanceTitle: "Portfolio Temporarily Offline",
+    maintenanceMessage: "Upgrading systems and deploying new Web3 features. Please check back shortly or connect with me on socials!"
+  },
+  updatedAt: 1788700000000,
   profile: {
     name: "Sonugg",
     headline: "Web3 Content Creator & Developer",

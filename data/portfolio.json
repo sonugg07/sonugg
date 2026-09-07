@@ -1,4 +1,10 @@
 {
+  "settings": {
+    "isWebsiteOnline": true,
+    "maintenanceTitle": "Portfolio Temporarily Offline",
+    "maintenanceMessage": "Upgrading systems and deploying new Web3 features. Please check back shortly or connect with me on socials!"
+  },
+  "updatedAt": 1788700000000,
   "profile": {
     "name": "Sonugg",
     "headline": "Web3 Content Creator & Developer",
@@ -95,22 +101,6 @@
     }
   ],
   "projects": [
-    {
-      "id": "proj-1788687809458",
-      "title": "rfgvhb",
-      "description": "wsedrftgy",
-      "image": "https://images.unsplash.com/photo-1639762681485-074b7f938ba0?q=80&w=1200&auto=format&fit=crop",
-      "category": "dappp",
-      "technologies": [
-        "Solidity",
-        "Next.js",
-        "Viem"
-      ],
-      "demoUrl": "",
-      "githubUrl": "",
-      "status": "Live",
-      "featured": true
-    },
     {
       "id": "evm-chain-pulse",
       "title": "EVM Chain Pulse & Liquidity Sentinel",

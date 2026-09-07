@@ -49,7 +49,15 @@ export interface Stat {
   value: string;
 }
 
+export interface SiteSettings {
+  isWebsiteOnline: boolean;
+  maintenanceTitle?: string;
+  maintenanceMessage?: string;
+}
+
 export interface PortfolioData {
+  settings?: SiteSettings;
+  updatedAt?: number;
   profile: Profile;
   pillars: Pillar[];
   skills: Skill[];
@@ -57,3 +65,4 @@ export interface PortfolioData {
   projects: Project[];
   stats?: Stat[];
 }
+

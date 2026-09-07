@@ -11,6 +11,7 @@ interface PortfolioContextType {
   isLoading: boolean;
   isSaving: boolean;
   saveData: (newData: PortfolioData) => Promise<{ success: boolean; message: string }>;
+  toggleWebsiteStatus: (isOnline: boolean) => Promise<boolean>;
   updateProfile: (profile: Partial<Profile>) => Promise<boolean>;
   addProject: (project: Omit<Project, 'id'>) => Promise<boolean>;
   editProject: (id: string, updated: Partial<Project>) => Promise<boolean>;
@@ -33,21 +34,21 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode; initialDat
 
   // 1. Initial Load: Check localStorage first for instant hydration, then verify with server API
   useEffect(() => {
-    let localFound = false;
+    let localData: PortfolioData | null = null;
     try {
       const cached = localStorage.getItem(STORAGE_KEY);
       if (cached) {
-        const parsed = JSON.parse(cached);
+        const parsed: PortfolioData = JSON.parse(cached);
         if (parsed && parsed.profile && Array.isArray(parsed.projects)) {
+          localData = parsed;
           setData(parsed);
-          localFound = true;
         }
       }
     } catch (e) {
       console.warn('Could not read from localStorage', e);
     }
 
-    // 2. Fetch from server API to get authoritative disk-backed data
+    // 2. Fetch from server API to get authoritative data with timestamp comparison
     fetch('/api/portfolio', { cache: 'no-store' })
       .then((res) => {
         if (!res.ok) throw new Error('Network response not ok');
@@ -55,11 +56,25 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode; initialDat
       })
       .then((serverData: PortfolioData) => {
         if (serverData && serverData.profile) {
-          setData(serverData);
-          try {
-            localStorage.setItem(STORAGE_KEY, JSON.stringify(serverData));
-          } catch (e) {
-            console.warn('Failed to update localStorage cache', e);
+          const serverTime = serverData.updatedAt || 0;
+          const localTime = localData?.updatedAt || 0;
+
+          // If localData has user changes that are newer than static/server data, keep local
+          if (localData && localTime > serverTime) {
+            // Keep local data in state & sync to server
+            fetch('/api/portfolio', {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: JSON.stringify(localData),
+            }).catch((err) => console.warn('Background server sync error:', err));
+          } else {
+            // Server data is newer or local data is absent
+            setData(serverData);
+            try {
+              localStorage.setItem(STORAGE_KEY, JSON.stringify(serverData));
+            } catch (e) {
+              console.warn('Failed to update localStorage cache', e);
+            }
           }
         }
       })
@@ -71,25 +86,35 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode; initialDat
       });
   }, []);
 
-  // Save full portfolio data to both Server File System and LocalStorage
+  // Save full portfolio data to both Server and LocalStorage with fresh timestamp
   const saveData = async (newData: PortfolioData): Promise<{ success: boolean; message: string }> => {
     setIsSaving(true);
+    const stampedData: PortfolioData = {
+      ...newData,
+      updatedAt: Date.now(),
+      settings: {
+        isWebsiteOnline: newData.settings?.isWebsiteOnline !== false,
+        maintenanceTitle: newData.settings?.maintenanceTitle || 'Portfolio Temporarily Offline',
+        maintenanceMessage: newData.settings?.maintenanceMessage || 'Upgrading systems and deploying new Web3 features.',
+      },
+    };
+
     try {
       // 1. Save to localStorage immediately
       try {
-        localStorage.setItem(STORAGE_KEY, JSON.stringify(newData));
+        localStorage.setItem(STORAGE_KEY, JSON.stringify(stampedData));
       } catch (e) {
         console.warn('localStorage save warning:', e);
       }
 
       // 2. Update React state immediately
-      setData(newData);
+      setData(stampedData);
 
-      // 3. Persist to server disk via API
+      // 3. Persist to server API
       const res = await fetch('/api/portfolio', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify(newData),
+        body: JSON.stringify(stampedData),
       });
 
       if (!res.ok) {
@@ -106,6 +131,18 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode; initialDat
         message: 'Saved to local browser storage (server sync will retry on next connection).',
       };
     }
+  };
+
+  const toggleWebsiteStatus = async (isOnline: boolean): Promise<boolean> => {
+    const updated: PortfolioData = {
+      ...data,
+      settings: {
+        ...data.settings,
+        isWebsiteOnline: isOnline,
+      },
+    };
+    const res = await saveData(updated);
+    return res.success;
   };
 
   const updateProfile = async (updatedFields: Partial<Profile>): Promise<boolean> => {
@@ -223,6 +260,7 @@ export const PortfolioProvider: React.FC<{ children: React.ReactNode; initialDat
         isLoading,
         isSaving,
         saveData,
+        toggleWebsiteStatus,
         updateProfile,
         addProject,
         editProject,

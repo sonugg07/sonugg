@@ -22,13 +22,13 @@ import {
   Share2,
   User,
   Sparkles,
-  X
+  X,
+  Power,
+  Globe
 } from 'lucide-react';
 import { usePortfolio } from '@/context/PortfolioContext';
 import { Project, SocialLink, Skill, PortfolioData } from '@/types/portfolio';
 import { SocialIcon, AVAILABLE_SOCIAL_ICONS } from '@/components/SocialIcon';
-
-const ADMIN_PIN = 'sonugg2025';
 
 export default function AdminPage() {
   const { 
@@ -41,11 +41,13 @@ export default function AdminPage() {
 
   // Auth State
   const [isAuthenticated, setIsAuthenticated] = useState<boolean>(false);
+  const [isCheckingAuth, setIsCheckingAuth] = useState<boolean>(true);
+  const [isSubmittingAuth, setIsSubmittingAuth] = useState<boolean>(false);
   const [pinInput, setPinInput] = useState<string>('');
   const [pinError, setPinError] = useState<string>('');
 
   // Active Tab
-  const [activeTab, setActiveTab] = useState<'profile' | 'projects' | 'socials' | 'skills' | 'backup'>('profile');
+  const [activeTab, setActiveTab] = useState<'profile' | 'projects' | 'socials' | 'skills' | 'maintenance' | 'backup'>('profile');
 
   // Working copy of data for editing
   const [formData, setFormData] = useState<PortfolioData>(data);
@@ -84,12 +86,30 @@ export default function AdminPage() {
     featured: true,
   });
 
-  // Check saved session auth
+  // Check saved session auth with server-side cookie verification
   useEffect(() => {
-    const sessionAuth = sessionStorage.getItem('sonugg_admin_authed');
-    if (sessionAuth === 'true') {
-      setIsAuthenticated(true);
-    }
+    fetch('/api/admin/auth')
+      .then((res) => res.json())
+      .then((authData) => {
+        if (authData.authenticated) {
+          setIsAuthenticated(true);
+        } else {
+          const sessionAuth = sessionStorage.getItem('sonugg_admin_authed');
+          if (sessionAuth === 'true') {
+            setIsAuthenticated(true);
+          }
+        }
+      })
+      .catch((err) => {
+        console.warn('Session check warning:', err);
+        const sessionAuth = sessionStorage.getItem('sonugg_admin_authed');
+        if (sessionAuth === 'true') {
+          setIsAuthenticated(true);
+        }
+      })
+      .finally(() => {
+        setIsCheckingAuth(false);
+      });
   }, []);
 
   // Sync formData when data changes from context
@@ -102,20 +122,66 @@ export default function AdminPage() {
     setTimeout(() => setToastMessage(null), 4000);
   };
 
-  const handleLogin = (e: React.FormEvent) => {
+  const handleLogin = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (pinInput === ADMIN_PIN) {
-      setIsAuthenticated(true);
-      sessionStorage.setItem('sonugg_admin_authed', 'true');
-      setPinError('');
-    } else {
-      setPinError('Invalid security PIN. Please try again.');
+    setPinError('');
+    setIsSubmittingAuth(true);
+
+    try {
+      const res = await fetch('/api/admin/auth', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ pin: pinInput }),
+      });
+      const resData = await res.json();
+
+      if (res.ok && resData.success) {
+        setIsAuthenticated(true);
+        sessionStorage.setItem('sonugg_admin_authed', 'true');
+        setPinInput('');
+        setPinError('');
+      } else {
+        setPinError(resData.error || 'Invalid security PIN. Access denied.');
+      }
+    } catch (err) {
+      console.error('Login error:', err);
+      setPinError('Unable to connect to authentication service.');
+    } finally {
+      setIsSubmittingAuth(false);
     }
   };
 
-  const handleLogout = () => {
+  const handleLogout = async () => {
+    try {
+      await fetch('/api/admin/auth', { method: 'DELETE' });
+    } catch (err) {
+      console.warn('Logout error:', err);
+    }
     setIsAuthenticated(false);
     sessionStorage.removeItem('sonugg_admin_authed');
+  };
+
+  // Toggle Website Online / Maintenance Status
+  const handleToggleOnline = async () => {
+    const currentStatus = formData.settings?.isWebsiteOnline !== false;
+    const newStatus = !currentStatus;
+    const updatedData: PortfolioData = {
+      ...formData,
+      settings: {
+        ...formData.settings,
+        isWebsiteOnline: newStatus,
+      },
+    };
+    setFormData(updatedData);
+    const res = await saveData(updatedData);
+    if (res.success) {
+      showToast(
+        newStatus
+          ? 'Website is now LIVE for all visitors!'
+          : 'Website set to MAINTENANCE MODE. Visitors will see the maintenance screen.',
+        'success'
+      );
+    }
   };
 
   // Persist all changes
@@ -387,6 +453,20 @@ export default function AdminPage() {
   };
 
   // ----------------------------------------------------
+  // SESSION CHECKING SCREEN
+  // ----------------------------------------------------
+  if (isCheckingAuth) {
+    return (
+      <div className="min-h-screen bg-[#07050b] flex items-center justify-center p-4">
+        <div className="flex flex-col items-center gap-3 text-zinc-400">
+          <div className="w-8 h-8 border-2 border-pink-500 border-t-transparent rounded-full animate-spin" />
+          <span className="text-xs font-mono">Verifying secure admin session...</span>
+        </div>
+      </div>
+    );
+  }
+
+  // ----------------------------------------------------
   // LOGIN SCREEN
   // ----------------------------------------------------
   if (!isAuthenticated) {
@@ -416,10 +496,11 @@ export default function AdminPage() {
               <input
                 type="password"
                 required
+                disabled={isSubmittingAuth}
                 placeholder="Enter security PIN"
                 value={pinInput}
                 onChange={(e) => setPinInput(e.target.value)}
-                className="w-full px-4 py-3.5 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-pink-500 text-center tracking-widest text-lg text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-pink-500 transition-all font-mono"
+                className="w-full px-4 py-3.5 rounded-xl bg-zinc-950 border border-zinc-800 focus:border-pink-500 text-center tracking-widest text-lg text-white placeholder-zinc-600 focus:outline-none focus:ring-1 focus:ring-pink-500 transition-all font-mono disabled:opacity-50"
               />
               {pinError && (
                 <p className="text-xs text-rose-400 mt-2 font-mono flex items-center gap-1">
@@ -431,10 +512,20 @@ export default function AdminPage() {
 
             <button
               type="submit"
-              className="w-full py-3.5 rounded-xl font-semibold text-white bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 shadow-lg shadow-pink-500/30 transition-all active:scale-98 flex items-center justify-center gap-2"
+              disabled={isSubmittingAuth}
+              className="w-full py-3.5 rounded-xl font-semibold text-white bg-gradient-to-r from-pink-500 to-rose-600 hover:from-pink-600 hover:to-rose-700 shadow-lg shadow-pink-500/30 transition-all active:scale-98 flex items-center justify-center gap-2 disabled:opacity-50"
             >
-              <Unlock size={16} />
-              <span>Unlock Admin Panel</span>
+              {isSubmittingAuth ? (
+                <>
+                  <RefreshCw size={16} className="animate-spin" />
+                  <span>Verifying PIN...</span>
+                </>
+              ) : (
+                <>
+                  <Unlock size={16} />
+                  <span>Unlock Admin Panel</span>
+                </>
+              )}
             </button>
           </form>
 
@@ -481,11 +572,20 @@ export default function AdminPage() {
               <Shield size={20} className="text-white" />
             </div>
             <div>
-              <div className="flex items-center gap-2">
+              <div className="flex items-center gap-2 flex-wrap">
                 <h1 className="text-lg font-bold text-white">Sonugg Control Center</h1>
-                <span className="text-[10px] font-mono px-2 py-0.5 rounded-full bg-emerald-950 text-emerald-300 border border-emerald-500/30">
-                  Disk Sync Active
-                </span>
+                <button
+                  onClick={handleToggleOnline}
+                  className={`text-[11px] font-mono px-2.5 py-1 rounded-full border flex items-center gap-1.5 transition-all cursor-pointer ${
+                    formData.settings?.isWebsiteOnline !== false
+                      ? 'bg-emerald-950/80 text-emerald-300 border-emerald-500/40 hover:bg-emerald-900/60'
+                      : 'bg-rose-950/80 text-rose-300 border-rose-500/40 hover:bg-rose-900/60'
+                  }`}
+                  title="Click to toggle Website Status (Live vs Maintenance Mode)"
+                >
+                  <span className={`w-2 h-2 rounded-full ${formData.settings?.isWebsiteOnline !== false ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+                  <span>{formData.settings?.isWebsiteOnline !== false ? 'Site Online (LIVE)' : 'Site Offline (MAINTENANCE)'}</span>
+                </button>
               </div>
               <p className="text-xs text-zinc-400">
                 Persistent Portfolio Content & Socials Manager
@@ -571,6 +671,18 @@ export default function AdminPage() {
           >
             <Sparkles size={14} />
             <span>Skills ({formData.skills.length})</span>
+          </button>
+
+          <button
+            onClick={() => setActiveTab('maintenance')}
+            className={`px-4 py-2 rounded-xl text-xs font-semibold flex items-center gap-2 whitespace-nowrap transition-all ${
+              activeTab === 'maintenance'
+                ? 'bg-pink-500 text-white shadow-md shadow-pink-500/30'
+                : 'text-zinc-400 hover:text-white hover:bg-zinc-900'
+            }`}
+          >
+            <Power size={14} />
+            <span>Site Status ({formData.settings?.isWebsiteOnline !== false ? 'LIVE' : 'MAINTENANCE'})</span>
           </button>
 
           <button
@@ -1060,6 +1172,123 @@ export default function AdminPage() {
                     </button>
                   </div>
                 ))}
+              </div>
+            </div>
+          </div>
+        )}
+
+        {/* ---------------------------------------------------- */}
+        {/* TAB: SITE STATUS & MAINTENANCE */}
+        {/* ---------------------------------------------------- */}
+        {activeTab === 'maintenance' && (
+          <div className="space-y-6">
+            <div className="glass-panel p-6 sm:p-8 rounded-3xl border border-pink-500/20 space-y-6">
+              <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4 border-b border-zinc-800 pb-5">
+                <div>
+                  <h2 className="text-xl font-bold text-white flex items-center gap-2">
+                    <Power size={22} className={formData.settings?.isWebsiteOnline !== false ? "text-emerald-400" : "text-rose-400"} />
+                    <span>Website Status & Maintenance Mode</span>
+                  </h2>
+                  <p className="text-xs text-zinc-400 mt-1">
+                    Control public availability. When turned OFF, visitors see a sleek maintenance screen with your social links.
+                  </p>
+                </div>
+                
+                <button
+                  onClick={handleToggleOnline}
+                  className={`px-5 py-2.5 rounded-xl font-semibold text-xs flex items-center gap-2 shadow-lg transition-all active:scale-95 ${
+                    formData.settings?.isWebsiteOnline !== false
+                      ? 'bg-rose-600 hover:bg-rose-700 text-white shadow-rose-600/25'
+                      : 'bg-emerald-600 hover:bg-emerald-700 text-white shadow-emerald-600/25'
+                  }`}
+                >
+                  <Power size={14} />
+                  <span>{formData.settings?.isWebsiteOnline !== false ? 'Turn Website OFF (Maintenance Mode)' : 'Turn Website ON (Go LIVE)'}</span>
+                </button>
+              </div>
+
+              {/* Status Banner */}
+              <div className={`p-5 rounded-2xl border flex items-center justify-between gap-4 ${
+                formData.settings?.isWebsiteOnline !== false
+                  ? 'bg-emerald-950/20 border-emerald-500/30 text-emerald-300'
+                  : 'bg-rose-950/20 border-rose-500/30 text-rose-300'
+              }`}>
+                <div className="flex items-center gap-3">
+                  <div className={`w-3.5 h-3.5 rounded-full flex-shrink-0 ${formData.settings?.isWebsiteOnline !== false ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`} />
+                  <div>
+                    <div className="text-sm font-bold">
+                      {formData.settings?.isWebsiteOnline !== false
+                        ? 'Current Status: WEBSITE IS LIVE'
+                        : 'Current Status: WEBSITE IS OFFLINE (MAINTENANCE MODE)'}
+                    </div>
+                    <div className="text-xs text-zinc-400 mt-0.5">
+                      {formData.settings?.isWebsiteOnline !== false
+                        ? 'All visitors can view and interact with your complete portfolio, projects, and contact channels.'
+                        : 'Public visitors see a maintenance message and your social channels. Only admins can access the admin dashboard.'}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              {/* Maintenance Settings */}
+              <div className="space-y-4 pt-4 border-t border-zinc-800">
+                <h3 className="text-sm font-bold text-white uppercase tracking-wider font-mono">
+                  Customize Maintenance Screen Notice
+                </h3>
+
+                <div>
+                  <label className="block text-xs font-mono uppercase text-zinc-400 mb-1">
+                    Maintenance Headline
+                  </label>
+                  <input
+                    type="text"
+                    value={formData.settings?.maintenanceTitle || ''}
+                    placeholder="Portfolio Temporarily Offline"
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        settings: {
+                          ...formData.settings,
+                          isWebsiteOnline: formData.settings?.isWebsiteOnline !== false,
+                          maintenanceTitle: e.target.value,
+                        },
+                      })
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm text-white focus:border-pink-500 focus:outline-none"
+                  />
+                </div>
+
+                <div>
+                  <label className="block text-xs font-mono uppercase text-zinc-400 mb-1">
+                    Maintenance Reason / Description
+                  </label>
+                  <textarea
+                    rows={3}
+                    value={formData.settings?.maintenanceMessage || ''}
+                    placeholder="Upgrading systems and deploying new Web3 features. Please check back shortly or connect with me on socials!"
+                    onChange={(e) =>
+                      setFormData({
+                        ...formData,
+                        settings: {
+                          ...formData.settings,
+                          isWebsiteOnline: formData.settings?.isWebsiteOnline !== false,
+                          maintenanceMessage: e.target.value,
+                        },
+                      })
+                    }
+                    className="w-full px-4 py-2.5 rounded-xl bg-zinc-950 border border-zinc-800 text-sm text-white focus:border-pink-500 focus:outline-none"
+                  />
+                </div>
+
+                <div className="flex justify-end">
+                  <button
+                    onClick={handleSaveAll}
+                    className="px-5 py-2.5 rounded-xl bg-pink-500 hover:bg-pink-600 text-xs font-semibold text-white flex items-center gap-1.5 shadow-md shadow-pink-500/20"
+                  >
+                    <Save size={13} />
+                    <span>Save Maintenance Settings</span>
+                  </button>
+                </div>
               </div>
             </div>
           </div>
